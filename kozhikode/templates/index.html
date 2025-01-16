@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plastic Detection App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            margin-top: 20px;
+        }
+        #video {
+            width: 100%;
+            max-width: 640px;
+            margin-bottom: 20px;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            min-height: 50px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .hidden {
+            display: none;
+        }
+        #loading {
+            display: none;
+            margin-top: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Plastic Detection App</h1>
+    <div class="container">
+        <video id="video" autoplay></video>
+        <canvas id="canvas" class="hidden"></canvas>
+        <div>
+            <button id="captureImage">Capture & Analyze Image</button>
+        </div>
+        <div id="loading">Analyzing image...</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let stream = null;
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureButton = document.getElementById('captureImage');
+        const resultDiv = document.getElementById('result');
+        const loadingDiv = document.getElementById('loading');
+
+        // Start camera automatically when page loads
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                captureButton.disabled = false;
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                resultDiv.textContent = 'Error accessing camera: ' + err.message;
+                resultDiv.className = 'error';
+            }
+        }
+
+        // Start camera when page loads
+        window.addEventListener('load', startCamera);
+
+        // Capture and analyze image
+        captureButton.addEventListener('click', async () => {
+            try {
+                // Disable button while processing
+                captureButton.disabled = true;
+                loadingDiv.style.display = 'block';
+                resultDiv.textContent = '';
+
+                // Capture image
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                
+                // Get image data
+                const imageData = canvas.toDataURL('image/jpeg');
+                
+                // Send to backend for analysis
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                resultDiv.textContent = data.result;
+                resultDiv.className = 'success';
+            } catch (err) {
+                console.error('Error:', err);
+                resultDiv.textContent = 'Error: ' + err.message;
+                resultDiv.className = 'error';
+            } finally {
+                // Re-enable button and hide loading message
+                captureButton.disabled = false;
+                loadingDiv.style.display = 'none';
+            }
+        });
+
+        // Cleanup function
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html>
